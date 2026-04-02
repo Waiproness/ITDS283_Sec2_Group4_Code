@@ -10,7 +10,6 @@ class TeamCreditPage extends StatelessWidget {
       body: SafeArea(
         child: Center(
           child: Container(
-            // เพิ่มคำสั่งนี้เพื่อให้กล่องกว้างเต็มพื้นที่ (แต่ยังเว้นระยะ margin ซ้ายขวา 30 ไว้)
             width: double.infinity,
             margin: const EdgeInsets.symmetric(horizontal: 30),
             padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
@@ -32,13 +31,21 @@ class TeamCreditPage extends StatelessWidget {
                 const SizedBox(height: 30),
 
                 // สมาชิกคนที่ 1
-                // TODO: ใส่รูปภาพโดยเพิ่ม imagePath เช่น _buildTeamMember('6787012', 'Jirawat Pratuangtip', imagePath: 'assets/images/jirawat.png')
-                _buildTeamMember('6787012', 'Jirawat Pratuangtip'),
+                _buildTeamMember(
+                  '6787012', 
+                  'Jirawat Pratuangtip', 
+                  // ใส่ชื่อไฟล์รูปของคุณตรงนี้ครับ เช่น 'assets/images/jirawat.jpg'
+                  imagePath: 'assets/images/field.jpg', 
+                ),
                 const SizedBox(height: 30),
 
                 // สมาชิกคนที่ 2
-                // TODO: ใส่รูปภาพโดยเพิ่ม imagePath เช่น _buildTeamMember('6787044', 'Theerawat Puvekit', imagePath: 'assets/images/theerawat.png')
-                _buildTeamMember('6787044', 'Theerawat Puvekit'),
+                _buildTeamMember(
+                  '6787044', 
+                  'Theerawat Puvekit', 
+                  // ใส่ชื่อไฟล์รูปของคุณตรงนี้ครับ เช่น 'assets/images/theerawat.jpg'
+                  imagePath: 'assets/images/waiver.jpg', 
+                ),
                 const SizedBox(height: 40),
 
                 // ปุ่มย้อนกลับ
@@ -51,7 +58,8 @@ class TeamCreditPage extends StatelessWidget {
     );
   }
 
-  Widget _buildTeamMember(String studentId, String name) {
+  // เพิ่ม {String? imagePath} เพื่อให้ฟังก์ชันรับที่อยู่รูปภาพเข้ามาได้
+  Widget _buildTeamMember(String studentId, String name, {String? imagePath}) {
     return Column(
       children: [
         Container(
@@ -61,13 +69,13 @@ class TeamCreditPage extends StatelessWidget {
             color: const Color(0xFFD9D9D9), // สีเทา Placeholder
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 2),
-            // TODO: เมื่อมีรูปภาพแล้ว ให้เอาคอมเมนต์ 5 บรรทัดด้านล่างนี้ออก เพื่อแสดงรูป
-            // image: imagePath != null
-            //     ? DecorationImage(
-            //         image: AssetImage(imagePath),
-            //         fit: BoxFit.cover, // ปรับรูปให้พอดีกับวงกลม
-            //       )
-            //     : null,
+            // ถ้ามีการส่ง imagePath เข้ามา ให้แสดงรูปนั้น
+            image: imagePath != null && !imagePath.contains('________') 
+                ? DecorationImage(
+                    image: AssetImage(imagePath), 
+                    fit: BoxFit.cover, // ปรับรูปให้พอดีกับวงกลม
+                  )
+                : null,
           ),
         ),
         const SizedBox(height: 15),

@@ -1,11 +1,10 @@
-import 'dart:async';
+import 'dart:async'; // เพิ่มสำหรับการจัดการ Stream
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'search_screen.dart';
-// ยืนยันการ import ให้ตรงกับโครงสร้าง
-import 'profile/profile.dart';
+import 'profile/profile.dart'; // สำคัญ: import หน้า profile เข้ามา
 
 class MainMaps extends StatefulWidget {
   const MainMaps({super.key});
@@ -16,34 +15,42 @@ class MainMaps extends StatefulWidget {
 
 class _MainMapsState extends State<MainMaps> {
   final MapController _mapController = MapController();
-
+  
+  // ตัวแปรสำหรับเก็บพิกัดปัจจุบัน
   LatLng? _currentPosition;
+  
+  // ตัวแปรสำหรับดักฟังการเคลื่อนที่ (Stream)
   StreamSubscription<Position>? _positionStreamSubscription;
-
+  /// เพื่อเช็กว่ากล้องแผนที่ควรจะจับจ้องอยู่ที่ตัวเราตลอดเวลาไหม
   bool _isFollowingUser = true;
 
-  final LatLng _initialCenter = const LatLng(13.7946, 100.3236);
+  final LatLng _initialCenter = const LatLng(13.7946, 100.3236); // พิกัดเริ่มต้น
   final Color _primaryTeal = const Color(0xFF008282);
 
   @override
   void initState() {
     super.initState();
+    // เริ่มติดตามพิกัดทันทีที่เปิดหน้านี้
     _startLocationTracking();
   }
 
   @override
   void dispose() {
+    // สำคัญมาก: ต้องยกเลิกการติดตามพิกัดเมื่อปิดหน้าจอเพื่อประหยัดแบตเตอรี่
     _positionStreamSubscription?.cancel();
     super.dispose();
   }
 
+  // ฟังก์ชันติดตามพิกัดแบบ Real-time
   Future<void> _startLocationTracking() async {
     bool serviceEnabled;
     LocationPermission permission;
 
+    // เช็กว่าเปิด GPS หรือยัง
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
+    // เช็ก Permission
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -51,27 +58,30 @@ class _MainMapsState extends State<MainMaps> {
     }
     if (permission == LocationPermission.deniedForever) return;
 
+    // ตั้งค่าความแม่นยำ (ขยับทุกๆ 5 เมตรให้อัปเดต 1 ครั้ง)
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 5,
+      distanceFilter: 5, 
     );
 
-    _positionStreamSubscription =
-        Geolocator.getPositionStream(
-          locationSettings: locationSettings,
-        ).listen((Position position) {
-          setState(() {
-            _currentPosition = LatLng(position.latitude, position.longitude);
-          });
-
-          if (_isFollowingUser) {
-            _mapController.move(_currentPosition!, _mapController.camera.zoom);
-          }
+    // เปิดสตรีมรับพิกัดต่อเนื่อง
+      _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      (Position position) {
+        setState(() {
+          _currentPosition = LatLng(position.latitude, position.longitude);
         });
+        
+        // อัปเดตบรรทัดนี้: ให้กล้องเลื่อนตามตัวเราเฉพาะตอนที่โหมด Following เปิดอยู่
+        if (_isFollowingUser) {
+          _mapController.move(_currentPosition!, _mapController.camera.zoom);
+        }
+      }
+    );
   }
 
+  // ฟังก์ชันสำหรับปุ่มเป้าเล็ง (กดแล้วเด้งกลับมาที่ตัวเรา)
   void _moveToCurrentLocation() {
-    setState(() => _isFollowingUser = true);
+    setState(() => _isFollowingUser = true); // เปิดโหมดกล้องเกาะติด
     if (_currentPosition != null) {
       _mapController.move(_currentPosition!, 16.0);
     } else {
@@ -84,6 +94,7 @@ class _MainMapsState extends State<MainMaps> {
     return Scaffold(
       body: Stack(
         children: [
+          // 1. แผนที่
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -97,6 +108,7 @@ class _MainMapsState extends State<MainMaps> {
               ),
               MarkerLayer(
                 markers: [
+                  // หมุดตำแหน่งปัจจุบัน
                   if (_currentPosition != null)
                     Marker(
                       point: _currentPosition!,
@@ -114,7 +126,7 @@ class _MainMapsState extends State<MainMaps> {
                             decoration: BoxDecoration(
                               color: Colors.blue,
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
+                              border: Border.all(color: Colors.white, width: 2), // เพิ่มขอบขาวให้ดูมีมิติ
                             ),
                           ),
                         ),
@@ -125,7 +137,7 @@ class _MainMapsState extends State<MainMaps> {
             ],
           ),
 
-          // Search bar
+          // 2. แถบค้นหา
           Positioned(
             top: 0,
             left: 0,
@@ -144,20 +156,21 @@ class _MainMapsState extends State<MainMaps> {
                   bottomRight: Radius.circular(20),
                 ),
               ),
-              child: GestureDetector(
+              child: GestureDetector( // <--- เปลี่ยนตรงนี้
                 onTap: () async {
+                  // สั่งเปิดหน้า SearchScreen และรอรับค่าพิกัดที่จะ return กลับมา
                   final LatLng? result = await Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const SearchScreen(),
-                    ),
+                    MaterialPageRoute(builder: (context) => const SearchScreen()),
                   );
 
+                  // ถ้าได้พิกัดกลับมาจากการค้นหา
                   if (result != null) {
                     setState(() {
-                      _isFollowingUser = false;
+                      _isFollowingUser = false; // ปิดโหมดกล้องเกาะติดตัวเราชั่วคราว
                     });
-                    _mapController.move(result, 15.0);
+                    // สั่งเลื่อนกล้องไปที่สถานที่เป้าหมาย
+                    _mapController.move(result, 15.0); 
                   }
                 },
                 child: Container(
@@ -169,12 +182,9 @@ class _MainMapsState extends State<MainMaps> {
                   child: Row(
                     children: [
                       const SizedBox(width: 15),
-                      const Icon(Icons.search, size: 28),
+                      const Icon(Icons.search, color: Colors.black87, size: 28),
                       const SizedBox(width: 10),
-                      Text(
-                        "Search",
-                        style: TextStyle(color: Colors.grey[600], fontSize: 18),
-                      ),
+                      Text("Search", style: TextStyle(color: Colors.grey[600], fontSize: 18)),
                     ],
                   ),
                 ),
@@ -182,16 +192,14 @@ class _MainMapsState extends State<MainMaps> {
             ),
           ),
 
-          // Right buttons
+          // 3. ปุ่มด้านขวา
           Positioned(
             top: 130,
             right: 15,
             child: Column(
               children: [
-                _buildMapButton(
-                  Icons.my_location,
-                  onPressed: _moveToCurrentLocation,
-                ),
+                // สั่งให้ปุ่ม GPS ดึงกล้องกลับมาที่ตัวเรา
+                _buildMapButton(Icons.my_location, onPressed: _moveToCurrentLocation),
                 const SizedBox(height: 10),
                 _buildMapButton(Icons.explore_outlined, onPressed: () {}),
               ],
@@ -200,17 +208,13 @@ class _MainMapsState extends State<MainMaps> {
         ],
       ),
 
-      // Bottom bar
+      // 4. แถบเมนูด้านล่าง
       bottomNavigationBar: Container(
         height: 85,
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2)),
           ],
         ),
         child: Padding(
@@ -218,22 +222,16 @@ class _MainMapsState extends State<MainMaps> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(
-                icon: Icons.location_on,
-                label: "Explore",
-                isActive: true,
-              ),
+              _buildNavItem(icon: Icons.location_on, label: "Explore", isActive: true),
               _buildNavItem(icon: Icons.add, label: "AddRoute", isLarge: true),
+              // เพิ่ม onTap สำหรับลิงก์ไปหน้า Profile
               _buildNavItem(
-                icon: Icons.person_outline,
+                icon: Icons.person_outline, 
                 label: "Profile",
                 onTap: () {
-                  // แก้ไขตรงนี้ให้เรียก ProfilePage()
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const ProfilePage(),
-                    ),
+                    MaterialPageRoute(builder: (context) => const ProfilePage()),
                   );
                 },
               ),
@@ -252,26 +250,20 @@ class _MainMapsState extends State<MainMaps> {
         color: Colors.white,
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 2)),
         ],
       ),
-      child: IconButton(icon: Icon(icon), onPressed: onPressed),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.black87),
+        onPressed: onPressed,
+      ),
     );
   }
 
-  Widget _buildNavItem({
-    required IconData icon,
-    required String label,
-    bool isActive = false,
-    bool isLarge = false,
-    VoidCallback? onTap,
-  }) {
+  // ปรับให้รับค่า onTap เข้ามาได้
+  Widget _buildNavItem({required IconData icon, required String label, bool isActive = false, bool isLarge = false, VoidCallback? onTap}) {
     return InkWell(
-      onTap: onTap,
+      onTap: onTap ?? () {}, // ถ้ามีการส่ง onTap มาให้ใช้คำสั่งนั้น ถ้าไม่ส่งมาให้ปล่อยว่าง
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -279,11 +271,7 @@ class _MainMapsState extends State<MainMaps> {
           const SizedBox(height: 4),
           Text(
             label,
-            style: TextStyle(
-              color: _primaryTeal,
-              fontSize: 12,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            ),
+            style: TextStyle(color: _primaryTeal, fontSize: 12, fontWeight: isActive ? FontWeight.bold : FontWeight.normal),
           ),
         ],
       ),
