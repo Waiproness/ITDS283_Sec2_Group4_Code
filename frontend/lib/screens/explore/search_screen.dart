@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 👉 1. Import ตัวเก็บข้อมูล
-import '../widgets/custom_bottom_nav_item.dart';
+import '../../widgets/custom_bottom_nav_item.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.isGuest = false});

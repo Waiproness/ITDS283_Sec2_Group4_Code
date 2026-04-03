@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
-import '../screens/welcome_screen.dart'; // หรือไปหน้า login เลยก็ได้ครับ
+import '../screens/auth/welcome_screen.dart'; // หรือไปหน้า login เลยก็ได้ครับ
 
 // ฟังก์ชันสำหรับเรียก Popup แจ้งเตือนให้ Login
 void showLoginRequiredDialog(BuildContext context) {

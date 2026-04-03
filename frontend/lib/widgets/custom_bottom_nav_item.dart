@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:moremap/constants/app_colors.dart';
-import '../screens/welcome_screen.dart'; // import หน้า AddRoute
+import '../screens/auth/welcome_screen.dart'; // import หน้า AddRoute
 
 
 // ---------------------------------------------------
@@ -80,14 +80,16 @@ class CustomBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final bool isGuest;
   final VoidCallback? onAddRouteTap;
-  final VoidCallback? onExploreTap; // 👉 1. เพิ่มตัวแปรนี้
+  final VoidCallback? onExploreTap; 
+  final VoidCallback? onProfileTap;// 👉 1. เพิ่มตัวแปรนี้
 
   const CustomBottomNavBar({
     super.key,
     required this.selectedIndex,
     this.isGuest = false,
     this.onAddRouteTap,
-    this.onExploreTap, // 👉 2. ใส่รับค่าตรงนี้
+    this.onExploreTap,
+    this.onProfileTap, // 👉 2. ใส่รับค่าตรงนี้
   });
 
   @override
@@ -127,16 +129,19 @@ class CustomBottomNavBar extends StatelessWidget {
             
             // ปุ่ม 2: Profile (เผื่ออนาคต)
             _buildNavItem(
-              icon: Icons.person_outline,
+              icon: Icons.person_outline, 
               label: "Profile",
-              isActive: selectedIndex == 2,
+              isActive: selectedIndex == 2, // (เผื่อไว้ถ้าอยากให้สลับสี)
               onTap: () {
-                // TODO: ใส่ Navigator ไปหน้า Profile
                 if (isGuest) {
-                  showLoginRequiredDialog(context);
+                  showLoginRequiredDialog(context); // ดักไว้ก่อน เผื่อ Guest กด
                   return;
                 }
-              },
+                // 👉 3. พอตรวจ Guest ผ่าน ให้ยิงสัญญาณไปเปิดหน้า Profile เลย
+                if (onProfileTap != null) {
+                  onProfileTap!(); 
+                }
+              }
             ),
           ],
         ),

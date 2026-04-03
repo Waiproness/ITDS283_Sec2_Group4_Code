@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'screens/splash_screen.dart'; // Import หน้าโหลด
 import 'constants/app_colors.dart';
 import 'routes/app_routes.dart';
 
@@ -22,7 +21,6 @@ class MoreMapApp extends StatelessWidget {
       ),
       
       // ให้หน้าแรกสุดเป็นหน้า Loading (SplashScreen)
-      home: const SplashScreen(),
       initialRoute: AppRoutes.splash, // หน้าแรกที่จะเปิด
       routes: AppRoutes.getRoutes(),  // โยนแผนที่ Routes ทั้งหมดให้ระบบ
     );
