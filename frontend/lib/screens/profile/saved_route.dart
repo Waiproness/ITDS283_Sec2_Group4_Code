@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'route_detail.dart';
 
 class SavedRoutePage extends StatefulWidget {
-  const SavedRoutePage({super.key});
+  // รับข้อมูล List มาจากหน้า Profile
+  final List<Map<String, String>> initialRoutes;
+
+  const SavedRoutePage({super.key, required this.initialRoutes});
 
   @override
   State<SavedRoutePage> createState() => _SavedRoutePageState();
@@ -11,52 +14,52 @@ class SavedRoutePage extends StatefulWidget {
 class _SavedRoutePageState extends State<SavedRoutePage> {
   final Color primaryDarkTeal = const Color(0xFF0C8A8A);
 
-  // สร้างรายการข้อมูลเส้นทาง (จำลองเป็นข้อมูลเริ่มต้น)
-  List<Map<String, String>> routes = [
-    {
-      'title': 'Khlong Saan Sap',
-      'distance': '1 km',
-      'description': 'Explore this for one reason!\nto Find One Piece Because\nof that we have to survey',
-    },
-    {
-      'title': 'Khlong Saan Sap', // ข้อมูลสมมติอันที่สอง
-      'distance': '1 km',
-      'description': 'Explore this for one reason!\nto Find One Piece Because\nof that we have to survey',
-    },
-  ];
+  late List<Map<String, String>> routes;
+
+  @override
+  void initState() {
+    super.initState();
+    // คัดลอกข้อมูลใส่ตัวแปรภายในหน้านี้
+    routes = List<Map<String, String>>.from(widget.initialRoutes);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildHeader(context),
-          // แสดงผลรายการเส้นทางด้วย ListView.builder
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: routes.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 15),
-                  child: _buildRouteCard(
-                    context,
-                    index: index,
-                    title: routes[index]['title']!,
-                    distance: routes[index]['distance']!,
-                    description: routes[index]['description']!,
-                  ),
-                );
-              },
+    // ใช้ WillPopScope เพื่อดักจับตอนกดปุ่มย้อนกลับของมือถือ (Android Back Button) เพื่อส่งข้อมูลกลับด้วย
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, routes);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(20),
+                itemCount: routes.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 15),
+                    child: _buildRouteCard(
+                      context,
+                      index: index,
+                      title: routes[index]['title']!,
+                      distance: routes[index]['distance']!,
+                      description: routes[index]['description']!,
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // ส่วนหัว (Header)
   Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -73,8 +76,15 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 28),
+            onTap: () {
+              // กดปุ่ม Back ซ้ายบน ให้ส่งข้อมูล routes ทั้งหมดกลับไปหน้า Profile
+              Navigator.pop(context, routes);
+            },
+            child: const Icon(
+              Icons.arrow_back_ios,
+              color: Colors.white,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 10),
           const Text(
@@ -90,7 +100,6 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
     );
   }
 
-  // กล่องแสดงเส้นทางแต่ละอัน
   Widget _buildRouteCard(
     BuildContext context, {
     required int index,
@@ -132,7 +141,7 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
               ),
               GestureDetector(
                 onTap: () async {
-                  // รอรับข้อมูลกลับมาเมื่อหน้า Detail ปิดตัวลง
+                  // รอรับข้อมูลจากหน้า Detail เผื่อว่ามีการแก้ไขเส้นทางนั้นๆ
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -144,7 +153,6 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
                     ),
                   );
 
-                  // หากมีการแก้ไขข้อมูลและส่งค่ากลับมา ให้ทำการอัปเดต List 
                   if (result != null && result is Map<String, String>) {
                     setState(() {
                       routes[index]['title'] = result['title']!;
@@ -152,7 +160,11 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
                     });
                   }
                 },
-                child: const Icon(Icons.arrow_forward, color: Colors.black87, size: 28),
+                child: const Icon(
+                  Icons.arrow_forward,
+                  color: Colors.black87,
+                  size: 28,
+                ),
               ),
             ],
           ),
