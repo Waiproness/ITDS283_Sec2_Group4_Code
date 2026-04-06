@@ -1,7 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../routes/app_routes.dart';
+import '../../services/route_service.dart';
 
 class ProfileEditPage extends StatefulWidget {
-  // 👉 1. ลบ Constructor แบบเก่าทิ้งไปเลย ให้เหลือแค่นี้ครับ
   const ProfileEditPage({super.key});
 
   @override
@@ -16,50 +19,55 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   late TextEditingController _passwordController;
   late TextEditingController _emailController;
 
-  bool _isInitialized = false; // ตัวแปรเช็คว่าดึงข้อมูลหรือยัง
+  String _joinDate = '';
+  String? _existingAvatarUrl;
+  Uint8List? _selectedAvatarBytes;
+  String _fileExtension = 'jpg';
+  bool _isLoading = false;
+  bool _isInitialized = false;
+
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    // ❌ ไม่ต้องสร้าง Controller ในนี้แล้ว ให้ปล่อยว่างไว้
+    _usernameController = TextEditingController();
+    _passwordController = TextEditingController();
+    _emailController = TextEditingController();
   }
 
-  // 👉 2. ใช้ didChangeDependencies แทน initState สำหรับดึง ModalRoute
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    
-    // เช็คว่าเพิ่งเปิดหน้านี้ครั้งแรกใช่ไหม (เพื่อไม่ให้มันดึงค่าใหม่ซ้ำซ้อนตอนพิมพ์)
     if (!_isInitialized) {
-      // แกะกล่องข้อมูลที่ส่งมาจากหน้าแรก
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, String>?;
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       
-      // ดึงข้อมูลออกมาใช้ (ถ้าไม่มีให้เป็นค่าว่าง)
-      final username = args?['initialUsername'] ?? '';
-      final password = args?['initialPassword'] ?? '';
-      final email = args?['initialEmail'] ?? '';
+      _usernameController.text = args?['initialUsername'] ?? '';
+      _emailController.text = args?['initialEmail'] ?? '';
+      _existingAvatarUrl = args?['initialAvatarUrl'];
+      _joinDate = args?['joinDate'] ?? 'Joined Feb 2026';
 
-      // นำข้อมูลไปใส่ในกล่องข้อความ
-      _usernameController = TextEditingController(text: username);
-      _passwordController = TextEditingController(text: password);
-      _emailController = TextEditingController(text: email);
+      _isInitialized = true; 
+    }
+  }
 
-      _isInitialized = true; // เซ็ตว่าทำเสร็จแล้ว
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _selectedAvatarBytes = bytes;
+          _fileExtension = pickedFile.name.split('.').last;
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
     }
   }
 
   @override
-  void dispose() {
-    _usernameController.dispose();
-    _passwordController.dispose();
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // ❌ ลบ ModalRoute ใน build ออกไปได้เลย เพราะเราดึงไปแล้วใน didChangeDependencies
-    
     return Scaffold(
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
@@ -80,80 +88,52 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 10,
-        bottom: 30,
-        left: 20,
-        right: 20,
-      ),
-      decoration: BoxDecoration(
-        color: primaryDarkTeal,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-      ),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, bottom: 30, left: 20, right: 20),
+      decoration: BoxDecoration(color: primaryDarkTeal, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30))),
       child: Column(
         children: [
           Align(
             alignment: Alignment.centerLeft,
             child: GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: const Icon(
-                Icons.arrow_back_ios,
-                color: Colors.white,
-                size: 28,
-              ),
+              child: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 28),
             ),
           ),
           Stack(
             clipBehavior: Clip.none,
             children: [
+              // 🔥 แสดงรูปโปรไฟล์ที่กำลังเลือก
               Container(
-                width: 130,
-                height: 130,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFFD9D9D9),
-                ),
+                width: 130, height: 130,
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFD9D9D9)),
+                clipBehavior: Clip.hardEdge,
+                child: _selectedAvatarBytes != null
+                    ? Image.memory(_selectedAvatarBytes!, fit: BoxFit.cover)
+                    : (_existingAvatarUrl != null)
+                        ? Image.network(_existingAvatarUrl!, fit: BoxFit.cover)
+                        : const Icon(Icons.person, size: 80, color: Colors.grey),
               ),
               Positioned(
-                top: 5,
-                right: 5,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: primaryLightTeal,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.edit,
-                    color: Colors.black87,
-                    size: 20,
+                top: 5, right: 5,
+                child: GestureDetector(
+                  onTap: _pickImage, // กดเพื่อเปลี่ยนรูป
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: primaryLightTeal, shape: BoxShape.circle),
+                    child: const Icon(Icons.edit, color: Colors.black87, size: 20),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 15),
+          // 🔥 ชื่อเปลี่ยนตามแบบ Real-time ทันที!
           Text(
-            _usernameController.text, // แสดงชื่อที่อาจถูกพิมพ์แก้ไขอยู่แบบ Real-time
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Text(
-            '#33',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+            _usernameController.text.isNotEmpty ? _usernameController.text : 'No Name', 
+            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 5),
-          const Text(
-            'Joined Febuary 7, 2026',
-            style: TextStyle(color: Colors.white, fontSize: 14),
-          ),
+          Text(_joinDate, style: const TextStyle(color: Colors.white, fontSize: 14)), // 🔥 วันที่ Sync แล้ว
         ],
       ),
     );
@@ -163,56 +143,61 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2E2E2),
-        borderRadius: BorderRadius.circular(15),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFFE2E2E2), borderRadius: BorderRadius.circular(15)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildTextField(
-            'Username',
-            _usernameController,
-            onChanged: (val) => setState(() {}),
-          ), 
+          _buildTextField('Username', _usernameController, onChanged: (val) => setState(() {})), 
           const SizedBox(height: 15),
           _buildTextField('Password', _passwordController, isPassword: true),
           const SizedBox(height: 15),
-          _buildTextField('E-mail', _emailController),
+          const Text('Email', style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 5),
+          TextField(
+            controller: _emailController, readOnly: true, 
+            style: const TextStyle(color: Colors.grey), 
+            decoration: InputDecoration(
+              filled: true, fillColor: Colors.grey[300], 
+              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            ),
+          ),
           const SizedBox(height: 25),
 
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
-              onPressed: () {
-                // ส่งข้อมูลที่อัปเดตแล้วกลับไปให้หน้า Profile
-                Navigator.pop(context, {
-                  'username': _usernameController.text,
-                  'password': _passwordController.text,
-                  'email': _emailController.text,
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Profile Updated')),
-                );
+              onPressed: _isLoading ? null : () async {
+                setState(() => _isLoading = true);
+                final RouteService routeService = RouteService();
+                try {
+                  String? finalAvatar = _existingAvatarUrl;
+                  // ถ้าเลือกรูปใหม่ ให้อัปโหลดก่อน
+                  if (_selectedAvatarBytes != null) {
+                    finalAvatar = await routeService.uploadAvatar(_selectedAvatarBytes!, _fileExtension);
+                  }
+                  
+                  // ส่งขึ้น Cloud
+                  await routeService.updateUserProfile(_usernameController.text, finalAvatar);
+                  
+                  if (mounted) {
+                    Navigator.pop(context, true); // ส่งค่ากลับบอกหน้าหลักว่าแก้ไขสำเร็จ
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile Updated! ✅'), backgroundColor: Colors.green));
+                  }
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update ❌'), backgroundColor: Colors.red));
+                } finally {
+                  if (mounted) setState(() => _isLoading = false);
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF389C57),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 30,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text(
-                'Apply',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: _isLoading 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Apply', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -220,46 +205,18 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     );
   }
 
-  Widget _buildTextField(
-    String label,
-    TextEditingController controller, {
-    bool isPassword = false,
-    Function(String)? onChanged,
-  }) {
+  Widget _buildTextField(String label, TextEditingController controller, {bool isPassword = false, Function(String)? onChanged}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 16,
-            color: Colors.black87,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        Text(label, style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w500)),
         const SizedBox(height: 5),
         TextField(
-          controller: controller,
-          obscureText: isPassword,
-          onChanged: onChanged,
+          controller: controller, obscureText: isPassword, onChanged: onChanged,
           decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 15,
-              vertical: 15,
-            ),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.cancel_outlined, color: Colors.black87),
-              onPressed: () {
-                controller.clear();
-                if (onChanged != null) onChanged('');
-              },
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
-            ),
+            filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+            suffixIcon: IconButton(icon: const Icon(Icons.cancel_outlined, color: Colors.black87), onPressed: () { controller.clear(); if (onChanged != null) onChanged(''); }),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
           ),
         ),
       ],
@@ -267,27 +224,19 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildLogoutButton() {
+    // โค้ด Logout ของเดิมคุณวางตรงนี้ได้เลยครับ...
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Align(
         alignment: Alignment.centerRight,
         child: ElevatedButton(
-          onPressed: () {},
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFF6B6B),
-            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: const Text(
-            'Log Out',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          onPressed: () async {
+            final RouteService routeService = RouteService();
+            await routeService.signOut(); 
+            if (mounted) Navigator.pushNamedAndRemoveUntil(context, AppRoutes.welcome, (route) => false);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B6B), padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          child: const Text('Log Out', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
         ),
       ),
     );

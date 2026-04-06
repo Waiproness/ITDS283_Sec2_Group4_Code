@@ -1,7 +1,9 @@
-import 'dart:convert';
+import 'dart:typed_data'; 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 👉 นำเข้าระบบเซฟข้อมูล
+import 'package:image_picker/image_picker.dart'; 
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 import '../../routes/app_routes.dart';
+import '../../services/route_service.dart';
 
 class RouteDetailEditPage extends StatefulWidget {
   const RouteDetailEditPage({super.key});
@@ -16,8 +18,16 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
 
   String distance = '0 Km';
   bool isNewRoute = false;
-  String _initialTitle = ''; // เก็บชื่อเดิมไว้หาในฐานข้อมูล
+  String _routeId = ''; // 👉 1. สร้างตัวแปรไว้เก็บรหัส id ประจำเส้นทาง
   bool _isInitialized = false;
+  bool _isLoading = false; 
+
+  Uint8List? _selectedImageBytes;
+  String _fileExtension = 'jpg';
+  String? _existingImageUrl;
+  
+  final ImagePicker _picker = ImagePicker();
+  final RouteService _routeService = RouteService();
 
   @override
   void initState() {
@@ -38,7 +48,9 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
       
       distance = args?['distance'] ?? '0 Km';
       isNewRoute = args?['isNewRoute'] ?? false;
-      _initialTitle = title;
+      
+      _routeId = args?['id']?.toString() ?? ''; // 👉 2. รับ id มาเก็บไว้ในตัวแปร
+      _existingImageUrl = args?['image_url'];
 
       _titleController.text = title;
       _descriptionController.text = description;
@@ -54,56 +66,97 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
     super.dispose();
   }
 
-  // 👉 ฟังก์ชันสำหรับเซฟข้อมูลลงเครื่อง
-  Future<void> _saveRouteData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? routesString = prefs.getString('saved_routes');
-    List<Map<String, String>> currentRoutes = [];
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes(); 
+        setState(() {
+          _selectedImageBytes = bytes;
+          _fileExtension = pickedFile.name.split('.').last; 
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+    }
+  }
 
-    if (routesString != null) {
-      final List<dynamic> decoded = json.decode(routesString);
-      currentRoutes = decoded.map((e) => Map<String, String>.from(e)).toList();
+  Future<void> _saveRouteData() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูล'), backgroundColor: Colors.red),
+      );
+      return; 
+    }
+
+    setState(() => _isLoading = true); 
+
+    String? finalImageUrl = _existingImageUrl;
+
+    if (_selectedImageBytes != null) {
+      finalImageUrl = await _routeService.uploadImage(_selectedImageBytes!, _fileExtension);
     }
 
     final newRouteData = {
       'title': _titleController.text.isEmpty ? 'Untitled Route' : _titleController.text,
       'distance': distance,
       'description': _descriptionController.text,
-      'date': 'Apr 4, 2026', // 👉 อย่าลืมใส่วันที่จำลองเพื่อให้หน้า Profile เอาไปโชว์ได้
+      'image_url': finalImageUrl, 
+      'user_id': user.id, // 🔥 ส่งรหัสเจ้าของไปด้วย
     };
 
-    if (isNewRoute) {
-      currentRoutes.insert(0, newRouteData); 
-    } else {
-      int index = currentRoutes.indexWhere((r) => r['title'] == _initialTitle);
-      if (index != -1) {
-        currentRoutes[index] = newRouteData;
+    try {
+      if (isNewRoute) {
+        await _routeService.addRoute(newRouteData);
       } else {
-        currentRoutes.insert(0, newRouteData);
+        // 👉 3. แก้ไขโดยอ้างอิงจากรหัส _routeId ที่รับมา
+        await _routeService.updateRoute(_routeId, newRouteData);
       }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved to Cloud! ☁️'), backgroundColor: Colors.green));
+        if (isNewRoute) {
+          Navigator.pushReplacementNamed(context, AppRoutes.savedRoute);
+        } else {
+          Navigator.pop(context, {
+            'id': _routeId, // ส่งกลับไปด้วยเผื่อจำเป็น
+            'title': _titleController.text,
+            'description': _descriptionController.text,
+            'image_url': finalImageUrl,
+          });
+        }
+      }
+    } catch (e) {
+      print('Error saving data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ เกิดข้อผิดพลาดในการบันทึกข้อมูล'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false); 
     }
-
-    await prefs.setString('saved_routes', json.encode(currentRoutes));
   }
 
-  // --- 👉 เพิ่มฟังก์ชันลบข้อมูล ---
   Future<void> _deleteRouteData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? routesString = prefs.getString('saved_routes');
-    if (routesString != null) {
-      List<dynamic> decoded = json.decode(routesString);
-      List<Map<String, String>> currentRoutes = decoded.map((e) => Map<String, String>.from(e)).toList();
+    try {
+      setState(() => _isLoading = true);
+      // 👉 4. ลบข้อมูลโดยอ้างอิงจากรหัส _routeId 
+      await _routeService.deleteRoute(_routeId);
       
-      // ลบข้อมูลโดยหาจากชื่อเดิม (Initial Title)
-      currentRoutes.removeWhere((r) => r['title'] == _initialTitle);
-      
-      // เซฟข้อมูลที่เหลือกลับลงเครื่อง
-      await prefs.setString('saved_routes', json.encode(currentRoutes));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleted from Cloud! 🗑️'), backgroundColor: Colors.redAccent));
+        Navigator.popUntil(context, ModalRoute.withName(AppRoutes.savedRoute)); 
+      }
+    } catch (e) {
+      print('Error deleting data: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // ... (ส่วนหน้าจอ UI ของคุณเหมือนเดิม 100% ไม่แตะต้องเลยครับ)
     return Scaffold(
       backgroundColor: const Color(0xFF0C8A8A),
       body: SafeArea(
@@ -119,7 +172,6 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // ปุ่ม Cancel
                     Align(
                       alignment: Alignment.topRight,
                       child: ElevatedButton(
@@ -135,7 +187,6 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // ช่องแก้ไขชื่อ
                     Row(
                       children: [
                         const Text('Route: ', style: TextStyle(fontSize: 20, color: Colors.black87)),
@@ -157,15 +208,24 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
                     Text('Distance: $distance', style: const TextStyle(fontSize: 20, color: Colors.black87)),
                     const SizedBox(height: 20),
 
-                    // กรอบแผนที่
                     Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        Container(height: 220, width: double.infinity, decoration: const BoxDecoration(color: Colors.white)),
+                        Container(
+                          height: 220, 
+                          width: double.infinity, 
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                          clipBehavior: Clip.hardEdge,
+                          child: _selectedImageBytes != null
+                              ? Image.memory(_selectedImageBytes!, fit: BoxFit.cover)
+                              : (_existingImageUrl != null && _existingImageUrl!.isNotEmpty)
+                                  ? Image.network(_existingImageUrl!, fit: BoxFit.cover)
+                                  : const Center(child: Icon(Icons.image, size: 50, color: Colors.grey)),
+                        ),
                         Positioned(
                           bottom: -15, right: -15,
                           child: GestureDetector(
-                            onTap: () {},
+                            onTap: _pickImage, 
                             child: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: const BoxDecoration(color: Color(0xFF00CACA), shape: BoxShape.circle),
@@ -177,73 +237,42 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
                     ),
                     const SizedBox(height: 30),
 
-                    // ช่องแก้ไขรายละเอียด
                     TextField(
                       controller: _descriptionController,
                       maxLines: null,
                       style: const TextStyle(fontSize: 18, color: Colors.black87, height: 1.3),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero,
-                        hintText: 'Write your description here...', 
-                      ),
+                      decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero, hintText: 'Write your description here...'),
                     ),
                     const SizedBox(height: 40),
 
-                    // ปุ่ม Save และ Delete
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        // ปุ่ม Save
                         ElevatedButton(
-                          onPressed: () async {
-                            await _saveRouteData();
-
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved Successfully'), backgroundColor: Colors.green));
-
-                              if (isNewRoute) {
-                                Navigator.pushReplacementNamed(context, AppRoutes.savedRoute);
-                              } else {
-                                Navigator.pop(context, {
-                                  'title': _titleController.text,
-                                  'description': _descriptionController.text,
-                                });
-                              }
-                            }
-                          },
+                          onPressed: _isLoading ? null : _saveRouteData, 
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF389C57),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
                             elevation: 0,
                           ),
-                          child: const Text('Save', style: TextStyle(color: Colors.white, fontSize: 18)),
+                          child: _isLoading 
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Save', style: TextStyle(color: Colors.white, fontSize: 18)),
                         ),
 
-                        // 👉 ปุ่ม Delete ที่เรียกฟังก์ชันลบจริงและเด้งกลับหน้าให้ถูก
                         if (!isNewRoute)
                           ElevatedButton(
-                            onPressed: () async {
-                              // 1. สั่งลบข้อมูลออกจากเครื่อง
-                              await _deleteRouteData(); 
-                              
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Deleted Successfully'), backgroundColor: Colors.redAccent)
-                                );
-                                
-                                // 2. สั่งปิดหน้า Edit และหน้า Detail ทิ้ง แล้วไปโผล่ที่หน้า Saved Route 
-                                // (การทำแบบนี้จะทำให้หน้า Saved Route รีเฟรชข้อมูลอัตโนมัติตามที่เราตั้งค่าไว้)
-                                Navigator.popUntil(context, ModalRoute.withName(AppRoutes.savedRoute)); 
-                              }
-                            },
+                            onPressed: _isLoading ? null : _deleteRouteData,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFF6B6B),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                               padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 12),
                               elevation: 0,
                             ),
-                            child: const Text('Delete', style: TextStyle(color: Colors.white, fontSize: 18)),
+                            child: _isLoading 
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Delete', style: TextStyle(color: Colors.white, fontSize: 18)),
                           ),
                       ],
                     ),

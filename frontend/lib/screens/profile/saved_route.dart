@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 👉 นำเข้าระบบโหลดข้อมูล
 import '../../routes/app_routes.dart';
+import '../../services/route_service.dart'; 
 
 class SavedRoutePage extends StatefulWidget {
   const SavedRoutePage({super.key});
@@ -12,41 +11,37 @@ class SavedRoutePage extends StatefulWidget {
 
 class _SavedRoutePageState extends State<SavedRoutePage> {
   final Color primaryDarkTeal = const Color(0xFF0C8A8A);
-  List<Map<String, String>> routes = [];
+  
+  List<Map<String, dynamic>> routes = []; 
   bool isLoading = true;
+
+  final RouteService _routeService = RouteService();
 
   @override
   void initState() {
     super.initState();
-    _fetchRoutesFromLocal();
+    _fetchRoutesFromCloud(); 
   }
 
-  // 👉 ฟังก์ชันโหลดข้อมูลจากในเครื่อง (SharedPreferences)
-  Future<void> _fetchRoutesFromLocal() async {
+  Future<void> _fetchRoutesFromCloud() async {
     setState(() => isLoading = true);
     
-    // หน่วงเวลาให้ดูเหมือนโหลดข้อมูลนิดนึง
-    await Future.delayed(const Duration(milliseconds: 500)); 
-    
-    final prefs = await SharedPreferences.getInstance();
-    final String? routesString = prefs.getString('saved_routes');
-
-    if (mounted) {
-      if (routesString != null) {
-        // มีข้อมูลที่ถูกเซฟไว้ เอามาโชว์
-        final List<dynamic> decoded = json.decode(routesString);
+    try {
+      final List<dynamic> data = await _routeService.getRoutes();
+      
+      if (mounted) {
         setState(() {
-          routes = decoded.map((e) => Map<String, String>.from(e)).toList();
+          routes = data.map((e) => e as Map<String, dynamic>).toList();
           isLoading = false;
         });
-      } else {
-        // ยังไม่มีข้อมูลเลย โชว์ Mock Data ไปก่อน
-        setState(() {
-          routes = [
-            {'title': 'Welcome to MoreMap', 'distance': '0 km', 'description': 'Start recording your first route!'}
-          ];
-          isLoading = false;
-        });
+      }
+    } catch (e) {
+      print('Error loading routes: $e');
+      if (mounted) {
+        setState(() => isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้'), backgroundColor: Colors.redAccent),
+        );
       }
     }
   }
@@ -62,7 +57,7 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
             child: isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF0C8A8A))) 
                 : routes.isEmpty
-                    ? const Center(child: Text('No saved routes found.', style: TextStyle(fontSize: 18)))
+                    ? const Center(child: Text('No saved routes found. ☁️', style: TextStyle(fontSize: 18, color: Colors.grey)))
                     : ListView.builder(
                         padding: const EdgeInsets.all(20),
                         itemCount: routes.length,
@@ -71,9 +66,11 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
                             padding: const EdgeInsets.only(bottom: 15),
                             child: _buildRouteCard(
                               context,
-                              title: routes[index]['title'] ?? '',
-                              distance: routes[index]['distance'] ?? '',
-                              description: routes[index]['description'] ?? '',
+                              id: routes[index]['id']?.toString() ?? '', // 👉 1. ดึง id ออกมาจาก Cloud
+                              title: routes[index]['title']?.toString() ?? 'Untitled',
+                              distance: routes[index]['distance']?.toString() ?? '0 km',
+                              description: routes[index]['description']?.toString() ?? '',
+                              imageUrl: routes[index]['image_url']?.toString(), 
                             ),
                           );
                         },
@@ -102,23 +99,24 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
     );
   }
 
-  Widget _buildRouteCard(BuildContext context, {required String title, required String distance, required String description}) {
+  // 👉 2. เพิ่ม required String id ในฟังก์ชัน
+  Widget _buildRouteCard(BuildContext context, {required String id, required String title, required String distance, required String description, String? imageUrl}) {
     return GestureDetector(
       onTap: () async {
-        // เปิดหน้า Detail (ดูรายละเอียด)
         await Navigator.pushNamed(
           context,
-          AppRoutes.routeDetail, 
+          AppRoutes.routeDetail, // หรือไปหน้า Edit 
           arguments: {
+            'id': id, // 👉 3. ส่งกุญแจ id ไปให้หน้าต่อไปด้วย!
             'title': title,
             'distance': distance,
             'description': description,
+            'image_url': imageUrl, 
           },
         );
 
-        // เวลากด Back ถอยกลับมา ให้ทำการโหลดข้อมูลล่าสุดมาโชว์เสมอ
         if (mounted) {
-          _fetchRoutesFromLocal(); 
+          _fetchRoutesFromCloud(); 
         }
       },
       child: Container(
@@ -138,7 +136,7 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
                   child: Text(
                     description, 
                     maxLines: 2, 
-                    overflow: TextOverflow.ellipsis, // กันข้อความล้น
+                    overflow: TextOverflow.ellipsis, 
                     style: const TextStyle(fontSize: 16, color: Color(0xFF6B6B6B), height: 1.3)
                   )
                 ),

@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 👉 นำเข้าระบบอ่านข้อมูลจากเครื่อง
 import '../../routes/app_routes.dart';
+import '../../services/route_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,40 +12,55 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final Color primaryDarkTeal = const Color(0xFF0C8A8A);
   final Color primaryLightTeal = const Color(0xFF00CACA);
-  final Color backgroundColor = const Color(0xFFF4F6F6);
 
-  // 1. ข้อมูลผู้ใช้ (รอเชื่อม Backend พรุ่งนี้)
   String currentUsername = 'Theerawat Puvekit';
-  String currentPassword = '**************';
-  String currentEmail = 'Theerawat.p@gmail.com';
+  String currentEmail = 'Loading...';
+  String joinDate = 'Joined...'; // 👉 เก็บวันที่เข้าร่วม
+  String? avatarUrl; // 👉 เก็บลิงก์รูปโปรไฟล์
 
-  // 2. ถังเก็บข้อมูลเส้นทาง
-  List<Map<String, String>> myRoutes = [];
+  List<Map<String, dynamic>> myRoutes = [];
+  final RouteService _routeService = RouteService(); 
 
   @override
   void initState() {
     super.initState();
-    _loadProfileData(); // โหลดข้อมูลทันทีที่เปิดหน้า Profile
+    _loadProfileData();
+    _loadUserInfo(); 
   }
 
-  // 👉 ฟังก์ชันไปดูดข้อมูลจากที่เซฟไว้ในเครื่องมาคำนวณ
-  Future<void> _loadProfileData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? routesString = prefs.getString('saved_routes');
+  void _loadUserInfo() {
+    final user = _routeService.currentUser;
+    if (user != null) {
+      setState(() {
+        currentEmail = user.email ?? 'No Email';
+        
+        // ดึงชื่อและรูปภาพ
+        final metaData = user.userMetadata;
+        if (metaData != null) {
+          if (metaData.containsKey('username')) currentUsername = metaData['username'];
+          if (metaData.containsKey('avatar_url')) avatarUrl = metaData['avatar_url'];
+        }
 
-    if (routesString != null) {
-      final List<dynamic> decoded = json.decode(routesString);
-      if (mounted) {
-        setState(() {
-          myRoutes = decoded.map((e) => Map<String, String>.from(e)).toList();
-        });
-      }
-    } else {
+        // 🔥 แปลงวันที่จากฐานข้อมูลมาแสดงผล
+        if (user.createdAt.isNotEmpty) {
+          DateTime date = DateTime.parse(user.createdAt);
+          List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          joinDate = 'Joined ${months[date.month - 1]} ${date.year}';
+        }
+      });
+    }
+  }
+
+  Future<void> _loadProfileData() async {
+    try {
+      final data = await _routeService.getRoutes();
+      if (mounted) setState(() => myRoutes = data.map((e) => e as Map<String, dynamic>).toList());
+    } catch (e) {
       if (mounted) setState(() => myRoutes = []);
     }
   }
 
-  // ฟังก์ชันช่วยดึงตัวเลขจาก '1 km' หรือ '203.5 KM' ให้ออกมาเป็นตัวเลขเพื่อคำนวณ
+  // 🛠️ ฟังก์ชันที่หายไป เติมกลับมาให้แล้วครับ!
   double _parseDistance(String distanceStr) {
     final numericString = distanceStr.replaceAll(RegExp(r'[^0-9\.]'), '');
     if (numericString.isEmpty) return 0.0;
@@ -76,109 +90,77 @@ class _ProfilePageState extends State<ProfilePage> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(top: 60, bottom: 30, left: 20, right: 20),
-      decoration: BoxDecoration(
-        color: primaryDarkTeal,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-      ),
+      decoration: BoxDecoration(color: primaryDarkTeal, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30))),
       child: Column(
         children: [
-          // ปุ่มไปหน้า Edit Profile
           Align(
             alignment: Alignment.topRight,
             child: GestureDetector(
               onTap: () async {
-                // ส่งข้อมูลปัจจุบันไปหน้า Edit ผ่าน arguments และรอรับค่ากลับ
                 final result = await Navigator.pushNamed(
-                  context,
-                  AppRoutes.profileEdit,
+                  context, AppRoutes.profileEdit,
                   arguments: {
                     'initialUsername': currentUsername,
-                    'initialPassword': currentPassword,
                     'initialEmail': currentEmail,
+                    'initialAvatarUrl': avatarUrl, // ส่งรูปล่าสุดไป
+                    'joinDate': joinDate, // ส่งวันที่ไป
                   },
                 );
-
-                // หากมีการส่งข้อมูลกลับมา (กด Apply) ให้อัปเดตข้อมูลหน้าจอ
-                if (result != null && result is Map<String, String>) {
-                  setState(() {
-                    currentUsername = result['username'] ?? currentUsername;
-                    currentPassword = result['password'] ?? currentPassword;
-                    currentEmail = result['email'] ?? currentEmail;
-                  });
-                }
+                if (result != null) _loadUserInfo(); // โหลดข้อมูลใหม่ถ้ามีการเซฟ
               },
               child: Container(
                 padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
                 child: const Icon(Icons.build, color: Colors.white, size: 20),
               ),
             ),
           ),
           const SizedBox(height: 10),
 
-          // รูป Profile
+          // 🔥 โชว์รูปโปรไฟล์
           Container(
-            width: 120,
-            height: 120,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xFFD9D9D9),
-            ),
+            width: 120, height: 120,
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFD9D9D9)),
+            clipBehavior: Clip.hardEdge,
+            child: avatarUrl != null 
+                ? Image.network(avatarUrl!, fit: BoxFit.cover)
+                : const Icon(Icons.person, size: 60, color: Colors.grey),
           ),
           const SizedBox(height: 20),
 
-          // แสดงชื่อผู้ใช้ล่าสุด
-          Text(
-            currentUsername,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(currentUsername, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(currentEmail, style: const TextStyle(color: Colors.white70, fontSize: 16)),
           const SizedBox(height: 8),
-          const Text(
-            'เข้าร่วมเมื่อ 7 ก.พ. 2026',
-            style: TextStyle(color: Colors.white, fontSize: 14),
-          ),
+          Text(joinDate, style: const TextStyle(color: Colors.white, fontSize: 14)), // 🔥 โชว์วันที่จริง
         ],
       ),
     );
   }
 
   Widget _buildStatsSection() {
-    // คำนวณสถิติแบบ Real-time จาก myRoutes
     double overallDist = 0;
     double longestDist = 0;
     int createRouteCount = myRoutes.length;
     
-    // 👉 ดึงวันที่ล่าสุด (อันบนสุดของ List) 
-    // หมายเหตุ: การสร้าง TimeStamp ของจริงจะทำโดย Backend เดี๋ยวพรุ่งนี้เราค่อยมาดึงจาก API 
-    String latestDate = myRoutes.isNotEmpty ? (myRoutes.first['date'] ?? 'Apr 4, 2026') : 'N/A';
+    String latestActivity = myRoutes.isNotEmpty 
+        ? (myRoutes.last['title']?.toString() ?? 'N/A') 
+        : 'N/A';
 
     for (var route in myRoutes) {
-      double dist = _parseDistance(route['distance'] ?? '0');
+      double dist = _parseDistance(route['distance']?.toString() ?? '0');
       overallDist += dist;
       if (dist > longestDist) {
         longestDist = dist;
       }
     }
 
-    // จัด Format ตัวเลข (ถ้าลงตัวให้ตัดทศนิยมทิ้ง)
     String overallStr = overallDist.truncateToDouble() == overallDist
         ? overallDist.toStringAsFixed(0)
         : overallDist.toStringAsFixed(1);
     String longestStr = longestDist.truncateToDouble() == longestDist
         ? longestDist.toStringAsFixed(0)
         : longestDist.toStringAsFixed(1);
-
-    // จัด Format วันที่
-    List<String> dateParts = latestDate.split(' ');
-    String val1 = dateParts.length >= 2 ? '${dateParts[0]} ${dateParts[1]}' : latestDate;
-    String val2 = dateParts.length >= 3 ? dateParts[2] : '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -188,7 +170,7 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               Expanded(child: _buildStatCard('Overall Route', overallStr, 'KM')),
               const SizedBox(width: 15),
-              Expanded(child: _buildStatCard('Create Route', createRouteCount.toString(), 'Route')),
+              Expanded(child: _buildStatCard('Create Route', createRouteCount.toString(), 'Routes')),
             ],
           ),
           const SizedBox(height: 15),
@@ -196,7 +178,7 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               Expanded(child: _buildStatCard('Longest Route', longestStr, 'KM')),
               const SizedBox(width: 15),
-              Expanded(child: _buildStatCard('Lastest Activity', val1, val2)),
+              Expanded(child: _buildStatCard('Latest Activity', latestActivity, '')),
             ],
           ),
         ],
@@ -215,11 +197,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Text(
             title,
-            style: const TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600, fontSize: 14),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
@@ -228,15 +206,19 @@ class _ProfilePageState extends State<ProfilePage> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(
-                value1,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
+              Flexible(
+                child: Text(
+                  value1,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const SizedBox(width: 5),
-              Text(
-                value2,
-                style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600, fontSize: 16),
-              ),
+              if (value2.isNotEmpty) const SizedBox(width: 5),
+              if (value2.isNotEmpty)
+                Text(
+                  value2,
+                  style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600, fontSize: 16),
+                ),
             ],
           ),
         ],
@@ -254,31 +236,21 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       child: Column(
         children: [
-          // ไปหน้า Saved Route
           _buildMenuItem(
             context,
             'Your Save Route',
            onTap: () async {
-              // 👉 เปิดไปหน้า SavedRoute
               await Navigator.pushNamed(context, AppRoutes.savedRoute);
-
-              // 👉 พอกด Back กลับมาจากหน้า Saved Route ให้ดึงข้อมูลมาคำนวณใหม่! (เผื่อโดนลบ หรือแก้ไข)
-              if (mounted) {
-                _loadProfileData(); 
-              }
+              if (mounted) _loadProfileData(); 
             },
           ),
           const Divider(color: Colors.transparent, height: 10),
-
-          // Report Issues
           _buildMenuItem(
             context,
             'Report Issues',
             onTap: () => Navigator.pushNamed(context, AppRoutes.reportIssues), 
           ),
           const Divider(color: Colors.transparent, height: 10),
-
-          // Team Credit
           _buildMenuItem(
             context,
             'Team Credit',
@@ -291,10 +263,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildMenuItem(BuildContext context, String title, {VoidCallback? onTap}) {
     return ListTile(
-      title: Text(
-        title,
-        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
-      ),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
       trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
       onTap: onTap,
     );

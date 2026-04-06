@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_colors.dart';
+import '../../services/route_service.dart'; // 👉 1. Import Service เข้ามา
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -10,7 +11,24 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
-  bool _agreeTerms = true; // ค่าเริ่มต้นให้ติ๊กถูกไว้ตามรูปดีไซน์
+  bool _agreeTerms = true; 
+  bool _isLoading = false; // 👉 2. ตัวแปรสำหรับคุมสถานะปุ่มหมุนๆ ตอนรอสมัคร
+
+  // 👉 3. สร้าง Controller เพื่อดูดข้อความจากช่องพิมพ์
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  final RouteService _routeService = RouteService(); // เรียกพนักงานคลาวด์
+
+  @override
+  void dispose() {
+    // เคลียร์หน่วยความจำตอนปิดหน้า
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,10 +58,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const Text("Please create a new account", style: TextStyle(fontSize: 16, color: Colors.black87)),
               const SizedBox(height: 40),
 
-              // ช่องกรอก Name
+              // --- ช่องกรอก Name ---
               const Text("Name", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
+                controller: _nameController, // 👉 ผูก Controller
                 decoration: InputDecoration(
                   hintText: "Type something longer here...",
                   hintStyle: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
@@ -55,16 +74,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Colors.lightBlueAccent, width: 1.5), // ขอบสีฟ้าตอนกดพิมพ์เหมือนในรูป
+                    borderSide: const BorderSide(color: Colors.lightBlueAccent, width: 1.5),
                   ),
                 ),
               ),
               const SizedBox(height: 20),
 
-              // ช่องกรอก Email
+              // --- ช่องกรอก Email ---
               const Text("Email", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
+                controller: _emailController, // 👉 ผูก Controller
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: "myemail@gmail.com",
                   filled: true,
@@ -81,10 +102,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 20),
 
-              // ช่องกรอก Password
+              // --- ช่องกรอก Password ---
               const Text("Password", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
+                controller: _passwordController, // 👉 ผูก Controller
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   hintText: "••••••••",
@@ -110,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Checkbox ยอมรับเงื่อนไข
+              // --- Checkbox ยอมรับเงื่อนไข ---
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -139,25 +161,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 40),
 
-              // ปุ่ม Sign up
+              // --- 👉 4. ปุ่ม Sign up (ใส่ฟังก์ชัน Supabase แล้ว) ---
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _agreeTerms ? () {
-                    // TODO: ใส่ฟังก์ชันเช็ก Register ของ Supabase ตรงนี้
-                  } : null, // ถ้าไม่ติ๊ก Checkbox ปุ่มจะกดไม่ได้
+                  // ถ้าไม่ติ๊กถูก หรือ กำลังโหลดอยู่ จะปิดการกดปุ่ม
+                  onPressed: (_agreeTerms && !_isLoading) ? () async {
+                    // เช็กว่าพิมพ์ครบไหม
+                    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please fill in email and password')),
+                      );
+                      return;
+                    }
+
+                    setState(() => _isLoading = true); // เริ่มหมุน
+
+                    try {
+                      // สั่งสมัครสมาชิก
+                      await _routeService.signUp(
+                        _emailController.text.trim(),
+                        _passwordController.text.trim(),
+                      );
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Registration Successful! 🎉'), backgroundColor: Colors.green),
+                        );
+                        Navigator.pop(context); // สมัครเสร็จ เด้งกลับไปหน้า Login อัตโนมัติ
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
+                        );
+                      }
+                    } finally {
+                      if (mounted) setState(() => _isLoading = false); // หยุดหมุน
+                    }
+                  } : null, 
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryTeal,
-                    disabledBackgroundColor: Colors.grey[400], // สีปุ่มตอนโดนปิดใช้งาน
+                    disabledBackgroundColor: Colors.grey[400], 
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    "Sign up",
-                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isLoading 
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text(
+                          "Sign up",
+                          style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
               const SizedBox(height: 20),
