@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_colors.dart';
-import '../../services/route_service.dart'; // 👉 1. Import Service เข้ามา
+import '../../services/route_service.dart'; 
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -12,18 +12,17 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _agreeTerms = true; 
-  bool _isLoading = false; // 👉 2. ตัวแปรสำหรับคุมสถานะปุ่มหมุนๆ ตอนรอสมัคร
+  bool _isLoading = false; 
 
-  // 👉 3. สร้าง Controller เพื่อดูดข้อความจากช่องพิมพ์
+  // สร้าง Controller เพื่อดูดข้อความจากช่องพิมพ์
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  final RouteService _routeService = RouteService(); // เรียกพนักงานคลาวด์
+  final RouteService _routeService = RouteService(); 
 
   @override
   void dispose() {
-    // เคลียร์หน่วยความจำตอนปิดหน้า
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -62,9 +61,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const Text("Name", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
-                controller: _nameController, // 👉 ผูก Controller
+                controller: _nameController, 
                 decoration: InputDecoration(
-                  hintText: "Type something longer here...",
+                  hintText: "Enter your name...",
                   hintStyle: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
                   filled: true,
                   fillColor: Colors.grey[100],
@@ -84,10 +83,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const Text("Email", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
-                controller: _emailController, // 👉 ผูก Controller
+                controller: _emailController, 
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: "myemail@gmail.com",
+                  hintStyle: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
                   filled: true,
                   fillColor: Colors.grey[100],
                   border: OutlineInputBorder(
@@ -106,10 +106,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const Text("Password", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
-                controller: _passwordController, // 👉 ผูก Controller
+                controller: _passwordController, 
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  hintText: "••••••••",
+                  hintText: "Enter your password",
+                  hintStyle: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
                   filled: true,
                   fillColor: Colors.grey[100],
                   suffixIcon: IconButton(
@@ -161,28 +162,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 40),
 
-              // --- 👉 4. ปุ่ม Sign up (ใส่ฟังก์ชัน Supabase แล้ว) ---
+              // --- ปุ่ม Sign up ---
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  // ถ้าไม่ติ๊กถูก หรือ กำลังโหลดอยู่ จะปิดการกดปุ่ม
                   onPressed: (_agreeTerms && !_isLoading) ? () async {
-                    // เช็กว่าพิมพ์ครบไหม
-                    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+                    // เช็กว่าพิมพ์ครบไหม (เพิ่มการเช็คชื่อด้วย)
+                    if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please fill in email and password')),
+                        const SnackBar(content: Text('Please fill in all fields (Name, Email, Password)')),
                       );
                       return;
                     }
 
-                    setState(() => _isLoading = true); // เริ่มหมุน
+                    setState(() => _isLoading = true);
 
                     try {
-                      // สั่งสมัครสมาชิก
+                      // 👉 ส่งข้อมูล 3 อย่างไปให้ Service: อีเมล, รหัสผ่าน, และ ชื่อ
                       await _routeService.signUp(
                         _emailController.text.trim(),
                         _passwordController.text.trim(),
+                        _nameController.text.trim(),
                       );
                       
                       if (mounted) {
@@ -198,7 +199,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         );
                       }
                     } finally {
-                      if (mounted) setState(() => _isLoading = false); // หยุดหมุน
+                      if (mounted) setState(() => _isLoading = false);
                     }
                   } : null, 
                   style: ElevatedButton.styleFrom(

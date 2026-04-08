@@ -15,8 +15,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
   String currentUsername = 'Theerawat Puvekit';
   String currentEmail = 'Loading...';
-  String joinDate = 'Joined...'; // 👉 เก็บวันที่เข้าร่วม
-  String? avatarUrl; // 👉 เก็บลิงก์รูปโปรไฟล์
+  String joinDate = 'Joined...'; 
+  String? avatarUrl; 
 
   List<Map<String, dynamic>> myRoutes = [];
   final RouteService _routeService = RouteService(); 
@@ -41,11 +41,12 @@ class _ProfilePageState extends State<ProfilePage> {
           if (metaData.containsKey('avatar_url')) avatarUrl = metaData['avatar_url'];
         }
 
-        // 🔥 แปลงวันที่จากฐานข้อมูลมาแสดงผล
+        // แปลงวันที่จากฐานข้อมูลมาแสดงผล
         if (user.createdAt.isNotEmpty) {
           DateTime date = DateTime.parse(user.createdAt);
           List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          joinDate = 'Joined ${months[date.month - 1]} ${date.year}';
+          
+          joinDate = 'Joined ${months[date.month - 1]} ${date.day}, ${date.year}';
         }
       });
     }
@@ -60,7 +61,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // 🛠️ ฟังก์ชันที่หายไป เติมกลับมาให้แล้วครับ!
+  // ดึงเฉพาะตัวเลขออกมาจากข้อความ
   double _parseDistance(String distanceStr) {
     final numericString = distanceStr.replaceAll(RegExp(r'[^0-9\.]'), '');
     if (numericString.isEmpty) return 0.0;
@@ -102,22 +103,22 @@ class _ProfilePageState extends State<ProfilePage> {
                   arguments: {
                     'initialUsername': currentUsername,
                     'initialEmail': currentEmail,
-                    'initialAvatarUrl': avatarUrl, // ส่งรูปล่าสุดไป
-                    'joinDate': joinDate, // ส่งวันที่ไป
+                    'initialAvatarUrl': avatarUrl, 
+                    'joinDate': joinDate, 
                   },
                 );
-                if (result != null) _loadUserInfo(); // โหลดข้อมูลใหม่ถ้ามีการเซฟ
+                if (result != null) _loadUserInfo(); 
               },
               child: Container(
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-                child: const Icon(Icons.build, color: Colors.white, size: 20),
+                child: const Icon(Icons.settings, color: Colors.white, size: 20), // 👉 ไอคอนฟันเฟือง
               ),
             ),
           ),
           const SizedBox(height: 10),
 
-          // 🔥 โชว์รูปโปรไฟล์
+          // โชว์รูปโปรไฟล์
           Container(
             width: 120, height: 120,
             decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFD9D9D9)),
@@ -132,7 +133,7 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(height: 5),
           Text(currentEmail, style: const TextStyle(color: Colors.white70, fontSize: 16)),
           const SizedBox(height: 8),
-          Text(joinDate, style: const TextStyle(color: Colors.white, fontSize: 14)), // 🔥 โชว์วันที่จริง
+          Text(joinDate, style: const TextStyle(color: Colors.white, fontSize: 14)), 
         ],
       ),
     );
@@ -155,12 +156,29 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     }
 
-    String overallStr = overallDist.truncateToDouble() == overallDist
-        ? overallDist.toStringAsFixed(0)
-        : overallDist.toStringAsFixed(1);
-    String longestStr = longestDist.truncateToDouble() == longestDist
-        ? longestDist.toStringAsFixed(0)
-        : longestDist.toStringAsFixed(1);
+    // 🔥 ฟังก์ชันจัดการระยะทาง (ถ้าไม่ถึง 1000 เมตร ให้โชว์เป็นตัวเลขเต็มๆ)
+    String getDistValue(double m) {
+      if (m < 1000) {
+        return m.toStringAsFixed(0); 
+      } else {
+        double km = m / 1000;
+        return km.truncateToDouble() == km 
+            ? km.toStringAsFixed(0) 
+            : km.toStringAsFixed(2); // ถ้าเกิน 1000 ค่อยใส่ทศนิยม 2 ตำแหน่ง
+      }
+    }
+
+    // 🔥 ฟังก์ชันจัดการหน่วย (สลับ M กับ KM อัตโนมัติ)
+    String getDistUnit(double m) {
+      return m < 1000 ? 'M' : 'KM';
+    }
+
+    // 👉 นำฟังก์ชันมาใช้แทนของเดิมที่ล็อคตายตัว
+    String overallStr = getDistValue(overallDist);
+    String overallUnit = getDistUnit(overallDist);
+
+    String longestStr = getDistValue(longestDist);
+    String longestUnit = getDistUnit(longestDist);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -168,7 +186,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Row(
             children: [
-              Expanded(child: _buildStatCard('Overall Route', overallStr, 'KM')),
+              Expanded(child: _buildStatCard('Overall Route', overallStr, overallUnit)), // ส่งหน่วยที่คำนวณได้เข้าไป
               const SizedBox(width: 15),
               Expanded(child: _buildStatCard('Create Route', createRouteCount.toString(), 'Routes')),
             ],
@@ -176,7 +194,7 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(height: 15),
           Row(
             children: [
-              Expanded(child: _buildStatCard('Longest Route', longestStr, 'KM')),
+              Expanded(child: _buildStatCard('Longest Route', longestStr, longestUnit)), // ส่งหน่วยที่คำนวณได้เข้าไป
               const SizedBox(width: 15),
               Expanded(child: _buildStatCard('Latest Activity', latestActivity, '')),
             ],
@@ -240,9 +258,9 @@ class _ProfilePageState extends State<ProfilePage> {
             context,
             'Your Save Route',
            onTap: () async {
-              await Navigator.pushNamed(context, AppRoutes.savedRoute);
-              if (mounted) _loadProfileData(); 
-            },
+             await Navigator.pushNamed(context, AppRoutes.savedRoute);
+             if (mounted) _loadProfileData(); 
+           },
           ),
           const Divider(color: Colors.transparent, height: 10),
           _buildMenuItem(

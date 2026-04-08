@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_colors.dart';
 import '../../routes/app_routes.dart';
-import '../../services/route_service.dart'; // 👉 1. Import Service
+import '../../services/route_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,9 +12,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
-  bool _isLoading = false; // 👉 2. ตัวแปรคุมสถานะการโหลด
+  bool _isLoading = false;
 
-  // 👉 3. สร้าง Controller สำหรับดึงค่าจากช่องพิมพ์
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final RouteService _routeService = RouteService();
@@ -49,10 +48,11 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text("Email", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
-                controller: _emailController, // 👉 ผูก Controller
+                controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: "myemail@gmail.com",
+                  hintStyle: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
                   filled: true,
                   fillColor: Colors.grey[100],
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
@@ -65,10 +65,11 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text("Password", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               TextField(
-                controller: _passwordController, // 👉 ผูก Controller
+                controller: _passwordController,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  hintText: "••••••••",
+                  hintText: "Enter your password",
+                  hintStyle: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
                   filled: true,
                   fillColor: Colors.grey[100],
                   suffixIcon: IconButton(
@@ -79,19 +80,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.lightBlueAccent, width: 1.5)),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 40),
 
-              // Forgot Password (UI เฉยๆ)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: const Text("Forgot Password?", style: TextStyle(color: AppColors.primaryTeal, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 30),
-
-              // --- 👉 4. ปุ่ม Login (เชื่อมต่อ Supabase) ---
+              // --- ปุ่ม Login ---
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -102,10 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       return;
                     }
 
-                    setState(() => _isLoading = true); // เริ่มหมุน
+                    setState(() => _isLoading = true);
 
                     try {
-                      // สั่งล็อกอินผ่าน Service
                       await _routeService.signIn(
                         _emailController.text.trim(),
                         _passwordController.text.trim(),
@@ -115,17 +105,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Login Successful! 🚀'), backgroundColor: Colors.green),
                         );
-                        // ล็อกอินสำเร็จ ส่งไปหน้า Main (ที่มีแผนที่และ Profile)
                         Navigator.pushReplacementNamed(context, AppRoutes.mainMap);
                       }
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Login Failed: อีเมลหรือรหัสผ่านไม่ถูกต้อง'), backgroundColor: Colors.red),
+                          const SnackBar(content: Text('Login Failed: อีเมลหรือรหัสผ่านไม่ถูกต้อง'), backgroundColor: Colors.red),
                         );
                       }
                     } finally {
-                      if (mounted) setState(() => _isLoading = false); // หยุดหมุน
+                      if (mounted) setState(() => _isLoading = false);
                     }
                   },
                   style: ElevatedButton.styleFrom(

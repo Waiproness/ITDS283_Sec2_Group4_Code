@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'dart:typed_data'; 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:flutter_map/flutter_map.dart'; 
+import 'package:latlong2/latlong.dart';      
+
 import '../../routes/app_routes.dart';
 import '../../services/route_service.dart';
 
@@ -18,7 +22,9 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
 
   String distance = '0 Km';
   bool isNewRoute = false;
-  String _routeId = ''; // 👉 1. สร้างตัวแปรไว้เก็บรหัส id ประจำเส้นทาง
+  String _routeId = ''; 
+  List<LatLng> _routePoints = []; 
+
   bool _isInitialized = false;
   bool _isLoading = false; 
 
@@ -49,8 +55,9 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
       distance = args?['distance'] ?? '0 Km';
       isNewRoute = args?['isNewRoute'] ?? false;
       
-      _routeId = args?['id']?.toString() ?? ''; // 👉 2. รับ id มาเก็บไว้ในตัวแปร
+      _routeId = args?['id']?.toString() ?? ''; 
       _existingImageUrl = args?['image_url'];
+      _routePoints = args?['routePoints'] ?? []; 
 
       _titleController.text = title;
       _descriptionController.text = description;
@@ -98,19 +105,25 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
       finalImageUrl = await _routeService.uploadImage(_selectedImageBytes!, _fileExtension);
     }
 
+    // แปลงพิกัดเป็น List ของ JSON
+    List<Map<String, double>> routePointsJson = _routePoints.map((p) => {
+      'lat': p.latitude,
+      'lng': p.longitude,
+    }).toList();
+
     final newRouteData = {
       'title': _titleController.text.isEmpty ? 'Untitled Route' : _titleController.text,
       'distance': distance,
       'description': _descriptionController.text,
       'image_url': finalImageUrl, 
-      'user_id': user.id, // 🔥 ส่งรหัสเจ้าของไปด้วย
+      'user_id': user.id, 
+      if (routePointsJson.isNotEmpty) 'route_points': routePointsJson, 
     };
 
     try {
       if (isNewRoute) {
         await _routeService.addRoute(newRouteData);
       } else {
-        // 👉 3. แก้ไขโดยอ้างอิงจากรหัส _routeId ที่รับมา
         await _routeService.updateRoute(_routeId, newRouteData);
       }
       
@@ -120,7 +133,7 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
           Navigator.pushReplacementNamed(context, AppRoutes.savedRoute);
         } else {
           Navigator.pop(context, {
-            'id': _routeId, // ส่งกลับไปด้วยเผื่อจำเป็น
+            'id': _routeId, 
             'title': _titleController.text,
             'description': _descriptionController.text,
             'image_url': finalImageUrl,
@@ -140,7 +153,6 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
   Future<void> _deleteRouteData() async {
     try {
       setState(() => _isLoading = true);
-      // 👉 4. ลบข้อมูลโดยอ้างอิงจากรหัส _routeId 
       await _routeService.deleteRoute(_routeId);
       
       if (mounted) {
@@ -156,7 +168,6 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (ส่วนหน้าจอ UI ของคุณเหมือนเดิม 100% ไม่แตะต้องเลยครับ)
     return Scaffold(
       backgroundColor: const Color(0xFF0C8A8A),
       body: SafeArea(
@@ -207,6 +218,64 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
 
                     Text('Distance: $distance', style: const TextStyle(fontSize: 20, color: Colors.black87)),
                     const SizedBox(height: 20),
+
+                    // 🔥 Map Preview แบบกัน Error โชว์เส้นทาง 🔥
+                    if (_routePoints.isNotEmpty) ...[
+                      Builder(
+                        builder: (context) {
+                          // เช็คว่ามีการขยับไปจากจุดแรกจริงๆ ไหม เพื่อป้องกัน NaN Error
+                          bool hasRealMovement = _routePoints.length > 1 && 
+                              _routePoints.any((p) => p.latitude != _routePoints.first.latitude || p.longitude != _routePoints.first.longitude);
+
+                          return Container(
+                            height: 200,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.shade400, width: 2),
+                            ),
+                            clipBehavior: Clip.hardEdge,
+                            child: FlutterMap(
+                              options: MapOptions(
+                                initialCenter: _routePoints.first,
+                                initialZoom: 16.0,
+                                initialCameraFit: hasRealMovement
+                                    ? CameraFit.bounds(
+                                        bounds: LatLngBounds.fromPoints(_routePoints),
+                                        padding: const EdgeInsets.all(25.0),
+                                      )
+                                    : null,
+                                interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                              ),
+                              children: [
+                                TileLayer(
+                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.example.moremap',
+                                ),
+                                PolylineLayer(
+                                  polylines: [
+                                    Polyline(points: _routePoints, strokeWidth: 5.0, color: Colors.redAccent),
+                                  ],
+                                ),
+                                MarkerLayer(
+                                  markers: [
+                                    Marker(
+                                      point: _routePoints.first, width: 14, height: 14,
+                                      child: Container(decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
+                                    ),
+                                    Marker(
+                                      point: _routePoints.last, width: 14, height: 14,
+                                      child: Container(decoration: BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
+                                    ),
+                                  ],
+                                )
+                              ],
+                            ),
+                          );
+                        }
+                      ),
+                      const SizedBox(height: 20),
+                    ],
 
                     Stack(
                       clipBehavior: Clip.none,
@@ -271,8 +340,8 @@ class _RouteDetailEditPageState extends State<RouteDetailEditPage> {
                               elevation: 0,
                             ),
                             child: _isLoading 
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('Delete', style: TextStyle(color: Colors.white, fontSize: 18)),
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                : const Text('Delete', style: TextStyle(color: Colors.white, fontSize: 18)),
                           ),
                       ],
                     ),

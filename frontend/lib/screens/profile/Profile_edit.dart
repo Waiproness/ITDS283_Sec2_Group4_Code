@@ -43,6 +43,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       
       _usernameController.text = args?['initialUsername'] ?? '';
+      _passwordController.text = '********'; // 🔥 แทรกบรรทัดนี้เพิ่มเข้าไปครับ
       _emailController.text = args?['initialEmail'] ?? '';
       _existingAvatarUrl = args?['initialAvatarUrl'];
       _joinDate = args?['joinDate'] ?? 'Joined Feb 2026';

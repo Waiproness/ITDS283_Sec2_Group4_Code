@@ -16,7 +16,7 @@ class WelcomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Welcome MoreMap",
+                "Welcome To MoreMap",
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,

@@ -66,11 +66,12 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
                             padding: const EdgeInsets.only(bottom: 15),
                             child: _buildRouteCard(
                               context,
-                              id: routes[index]['id']?.toString() ?? '', // 👉 1. ดึง id ออกมาจาก Cloud
+                              id: routes[index]['id']?.toString() ?? '', 
                               title: routes[index]['title']?.toString() ?? 'Untitled',
                               distance: routes[index]['distance']?.toString() ?? '0 km',
                               description: routes[index]['description']?.toString() ?? '',
                               imageUrl: routes[index]['image_url']?.toString(), 
+                              routePoints: routes[index]['route_points'], // 👉 1. ดึง route_points จากฐานข้อมูลส่งลงไป
                             ),
                           );
                         },
@@ -99,19 +100,27 @@ class _SavedRoutePageState extends State<SavedRoutePage> {
     );
   }
 
-  // 👉 2. เพิ่ม required String id ในฟังก์ชัน
-  Widget _buildRouteCard(BuildContext context, {required String id, required String title, required String distance, required String description, String? imageUrl}) {
+  // 👉 2. เพิ่มการรับค่า routePoints ตรงนี้ (เป็น dynamic เพราะดึงมาจาก JSON)
+  Widget _buildRouteCard(BuildContext context, {
+    required String id, 
+    required String title, 
+    required String distance, 
+    required String description, 
+    String? imageUrl,
+    dynamic routePoints, // 👈 เพิ่มตรงนี้
+  }) {
     return GestureDetector(
       onTap: () async {
         await Navigator.pushNamed(
           context,
-          AppRoutes.routeDetail, // หรือไปหน้า Edit 
+          AppRoutes.routeDetail, 
           arguments: {
-            'id': id, // 👉 3. ส่งกุญแจ id ไปให้หน้าต่อไปด้วย!
+            'id': id, 
             'title': title,
             'distance': distance,
             'description': description,
             'image_url': imageUrl, 
+            'routePoints': routePoints, // 👉 3. แพ็กใส่กระเป๋าส่งไปให้หน้า detail!
           },
         );
 

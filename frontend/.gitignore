@@ -43,3 +43,31 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ==========================================
+# 🔥 SECURITY & SECRET FILES (DO NOT COMMIT)
+# ==========================================
+
+# Environment Variables & API Keys (เก็บพวก URL และ Key ของ Supabase)
+.env
+.env.*
+*.env
+
+# Android Keystore and Properties (กุญแจสำหรับปล่อยแอปลง Play Store)
+*.jks
+*.keystore
+android/key.properties
+
+# iOS Certificates (กุญแจสำหรับปล่อยแอปลง App Store)
+*.p12
+*.mobileprovision
+
+# Google/Firebase Services Configs (ไฟล์เชื่อมต่อบริการของ Google)
+google-services.json
+GoogleService-Info.plist
+
+# Mac/Windows OS files
+Thumbs.db
+
+# Old Dart package management
+.packages

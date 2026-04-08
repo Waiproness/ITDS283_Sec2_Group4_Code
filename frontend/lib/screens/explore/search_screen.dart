@@ -48,19 +48,53 @@ class _SearchScreenState extends State<SearchScreen> {
     await prefs.setStringList('recent_searches', _searchHistory);
   }
 
-  // ฟังก์ชันยิง API ไปถามหาพิกัด
+  // 🚀 ฟังก์ชันยิง API ไปถามหาพิกัด (อัปเกรดระบบดักจับคำค้นหาแล้ว)
   Future<void> _searchPlace(String query) async {
-    if (query.trim().isEmpty) return;
+    String searchText = query.trim();
+    if (searchText.isEmpty) return;
     
+    // --- 🛡️ 1. ดักจับข้อความก่อนเริ่มค้นหา ---
+    bool isOnlyNumbers = RegExp(r'^[0-9]+$').hasMatch(searchText);
+    bool isOnlySpecialChars = RegExp(r'^[^a-zA-Z0-9ก-๙]+$').hasMatch(searchText);
+
+    if (isOnlyNumbers) {
+      FocusManager.instance.primaryFocus?.unfocus(); // ซ่อนคีย์บอร์ด
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ ค้นหาด้วยตัวเลขอย่างเดียวไม่ได้ครับ กรุณาระบุชื่อสถานที่'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return; // 🛑 สั่งหยุดการทำงาน ไม่บันทึกประวัติ ไม่ยิง API
+    }
+
+    if (isOnlySpecialChars) {
+      FocusManager.instance.primaryFocus?.unfocus(); // ซ่อนคีย์บอร์ด
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ ค้นหาด้วยอักขระพิเศษอย่างเดียวไม่ได้ครับ'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return; // 🛑 สั่งหยุดการทำงาน
+    }
+    // ------------------------------------
+
     FocusManager.instance.primaryFocus?.unfocus();
 
     setState(() => _isLoading = true);
-    await _saveSearchHistory(query); 
+    await _saveSearchHistory(searchText); 
 
     try {
       await Future.delayed(const Duration(milliseconds: 800));
 
-      final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1';
+      final url = 'https://nominatim.openstreetmap.org/search?q=$searchText&format=json&limit=1';
       final response = await http.get(Uri.parse(url), headers: {
         'User-Agent': 'com.yourcompany.moremap' 
       });

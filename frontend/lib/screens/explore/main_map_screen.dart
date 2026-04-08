@@ -1,17 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+
 import '../../widgets/custom_bottom_nav_item.dart';
 import '../../widgets/circular_map_button.dart';
 import '../../routes/app_routes.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../../constants/app_colors.dart';
-
-// 👉 สำคัญ: Import หน้า Profile เข้ามาเพื่อเอามาซ้อนใน IndexedStack
-import '../profile/profile.dart'; 
+import '../profile/profile.dart';
+import '../../services/route_service.dart';
 
 class MainMaps extends StatefulWidget {
   final bool isGuest; 
@@ -23,8 +23,8 @@ class MainMaps extends StatefulWidget {
 
 class _MainMapsState extends State<MainMaps> {
   final MapController _mapController = MapController();
+  final RouteService _routeService = RouteService(); 
   
-  // 👉 ตัวแปรคุม Tab (0 = Explore, 1 = Add Route, 2 = Profile)
   int _currentTabIndex = 0;
   Timer? _debounceTimer;
 
@@ -40,6 +40,71 @@ class _MainMapsState extends State<MainMaps> {
 
   final LatLng _initialCenter = const LatLng(13.7946, 100.3236); 
   List<Marker> _poiMarkers = [];
+  
+  List<Polyline> _cloudPolylines = []; 
+
+  // 🔥 ฟังก์ชันสร้าง Popup ยืนยันการบันทึกเส้นทาง 🔥
+  Future<bool?> _showConfirmationDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Text('Start Recording?', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text(' Yes or No?', style: TextStyle(fontSize: 16)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false), // กด No ส่งค่า false
+              child: const Text('No', style: TextStyle(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true), // กด Yes ส่งค่า true
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryTeal,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Yes', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _fetchAllRoutesFromCloud() async {
+    try {
+      final data = await _routeService.getAllRoutes(); 
+      List<Polyline> loadedPolylines = [];
+
+      for (var route in data) {
+        if (route['route_points'] != null) {
+          List<dynamic> pointsJson = route['route_points'];
+          
+          List<LatLng> points = pointsJson.map((p) {
+            return LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble());
+          }).toList();
+
+          if (points.isNotEmpty) {
+            loadedPolylines.add(
+              Polyline(
+                points: points,
+                strokeWidth: 5.0,
+                color: Colors.purpleAccent.withOpacity(0.6), 
+              ),
+            );
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _cloudPolylines = loadedPolylines; 
+        });
+      }
+    } catch (e) {
+      print("Error fetching cloud routes: $e");
+    }
+  }
 
   Future<void> _fetchCyclingPOIs(LatLngBounds bounds) async {
     final south = bounds.south;
@@ -65,6 +130,8 @@ class _MainMapsState extends State<MainMaps> {
         final data = json.decode(response.body);
         final elements = data['elements'] as List;
 
+        if (!mounted) return; 
+        
         setState(() {
           _poiMarkers = elements.map((element) {
             final lat = element['lat'];
@@ -91,11 +158,14 @@ class _MainMapsState extends State<MainMaps> {
   void initState() {
     super.initState();
     _startLocationTracking();
+    _fetchAllRoutesFromCloud(); 
   }
 
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
+    _debounceTimer?.cancel(); 
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -153,11 +223,9 @@ class _MainMapsState extends State<MainMaps> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 👉 ใช้ IndexedStack มาสลับแฟ้มหน้าจอ
       body: IndexedStack(
-        index: _currentTabIndex == 2 ? 1 : 0, // ถ้า Tab เป็น 2 โชว์ Profile (Index 1) นอกนั้นโชว์ Map (Index 0)
+        index: _currentTabIndex == 2 ? 1 : 0, 
         children: [
-          // 🗺️ แฟ้ม 0: แผนที่และ UI ทับแผนที่ (สำหรับ Tab Explore และ AddRoute)
           Stack(
             children: [
               FlutterMap(
@@ -177,8 +245,9 @@ class _MainMapsState extends State<MainMaps> {
                         _debounceTimer!.cancel();
                       }
                       _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-                        if (camera.bounds != null) {
-                          _fetchCyclingPOIs(camera.bounds!);
+                        final currentBounds = camera.bounds;
+                        if (currentBounds != null) {
+                          _fetchCyclingPOIs(currentBounds);
                         }
                       });
                     }
@@ -186,18 +255,22 @@ class _MainMapsState extends State<MainMaps> {
                 ), 
                 children: [
                   TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.moremap'),
-                  MarkerLayer(markers: _poiMarkers),
                   
-                  if (_isRecording && _recordedRoutes.isNotEmpty)
-                    PolylineLayer(
-                      polylines: _recordedRoutes
-                          .where((route) => route.isNotEmpty)
-                          .map((route) => Polyline(points: route, strokeWidth: 5.0, color: Colors.redAccent))
-                          .toList(),
-                    ),
-
+                  PolylineLayer(
+                    polylines: [
+                      ..._cloudPolylines, 
+                      
+                      if (_isRecording && _recordedRoutes.isNotEmpty)
+                        ..._recordedRoutes
+                            .where((route) => route.isNotEmpty)
+                            .map((route) => Polyline(points: route, strokeWidth: 5.0, color: Colors.redAccent))
+                    ],
+                  ),
+                    
                   MarkerLayer(
                     markers: [
+                      ..._poiMarkers, 
+                      
                       if (_currentPosition != null)
                         Marker(
                           point: _currentPosition!, width: 60, height: 60,
@@ -317,18 +390,26 @@ class _MainMapsState extends State<MainMaps> {
                 Positioned(
                   bottom: 20, left: 20, right: 20,
                   child: GestureDetector(
-                    onTap: () {
+                    // 🔥 แก้ไขตรงนี้เป็น async เพื่อรอรับค่าจาก Popup 🔥
+                    onTap: () async {
                       if (!_isRecording) {
-                        setState(() {
-                          _isRecording = true;
-                          _isPaused = false;
-                          _recordedRoutes.clear();
-                          _totalDistance = 0.0;
-                          _recordedRoutes.add([]);
-                          if (_currentPosition != null) _recordedRoutes.last.add(_currentPosition!);
-                        });
+                        // 👉 เรียก Popup ขึ้นมาถามก่อน
+                        bool? confirm = await _showConfirmationDialog();
+
+                        // 👉 ถ้าผู้ใช้กด Yes (confirm เป็น true) ค่อยเริ่มบันทึก
+                        if (confirm == true && mounted) {
+                          setState(() {
+                            _isRecording = true;
+                            _isPaused = false;
+                            _recordedRoutes.clear();
+                            _totalDistance = 0.0;
+                            _recordedRoutes.add([]);
+                            if (_currentPosition != null) _recordedRoutes.last.add(_currentPosition!);
+                          });
+                        }
                       } else {
-                        // 👉 เมื่อกด "Finished Your Route" ให้คำนวณและเด้งไปหน้า Edit
+                        final List<LatLng> finalPath = _recordedRoutes.expand((x) => x).toList();
+                        
                         setState(() {
                           _isRecording = false;
                           _isPaused = false;
@@ -339,7 +420,6 @@ class _MainMapsState extends State<MainMaps> {
                           const SnackBar(content: Text('✅ บันทึกเส้นทางสำเร็จ! กำลังไปหน้าแก้ไข...'), backgroundColor: Colors.green)
                         );
                         
-                        // 👉 เด้งไปหน้า Edit อย่างถูกต้องและแนบ Arguments
                         Navigator.pushNamed(
                           context,
                           AppRoutes.routeDetailEdit,
@@ -347,9 +427,12 @@ class _MainMapsState extends State<MainMaps> {
                             'distance': _totalDistance >= 1000 
                                 ? "${(_totalDistance / 1000).toStringAsFixed(2)} km" 
                                 : "${_totalDistance.toStringAsFixed(0)} m",
-                            'isNewRoute': true, // ส่งธงไปบอกหน้าแก้ไขว่าเป็นเส้นทางใหม่
+                            'isNewRoute': true, 
+                            'routePoints': finalPath, 
                           },
-                        );
+                        ).then((_) {
+                          _fetchAllRoutesFromCloud();
+                        });
                       }
                     },
                     child: Container(
@@ -380,20 +463,21 @@ class _MainMapsState extends State<MainMaps> {
             ],
           ),
 
-          // 👤 แฟ้ม 1: หน้า Profile (โชว์เมื่อ Tab เป็น 2)
           const ProfilePage(),
         ],
       ),
       
-      // 👉 เมนูด้านล่างสุด
       bottomNavigationBar: _isRecording 
           ? _buildRecordingBottomNav() 
           : CustomBottomNavBar( 
               selectedIndex: _currentTabIndex,
               isGuest: widget.isGuest,
-              onExploreTap: () => setState(() => _currentTabIndex = 0), // สลับไปหน้า Map
-              onAddRouteTap: () => setState(() => _currentTabIndex = 1), // สลับไปหน้า Map โหมดเตรียม Record
-              onProfileTap: () => setState(() => _currentTabIndex = 2), // สลับเอาหน้า Profile ขึ้นมาบัง
+              onExploreTap: () {
+                setState(() => _currentTabIndex = 0);
+                _fetchAllRoutesFromCloud(); 
+              }, 
+              onAddRouteTap: () => setState(() => _currentTabIndex = 1), 
+              onProfileTap: () => setState(() => _currentTabIndex = 2), 
             ),
     );
   }
