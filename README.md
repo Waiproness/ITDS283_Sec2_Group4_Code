@@ -46,6 +46,7 @@ cd MoreMap
 
 Bash
 cd frontend
+เนื่องจากใช้ supabase เป็น backend จึง ไม่มี folder backend
 
 Bash
 flutter pub get
