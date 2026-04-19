@@ -35,26 +35,36 @@
 
 ### ขั้นตอนการรันแอปพลิเคชัน
 
+### ขั้นตอนการรันแอปพลิเคชัน
+
 1. **โคลนโปรเจกต์ลงเครื่องของคุณ:**
-   ```bash
-   git clone [https://github.com/YourUsername/MoreMap.git](https://github.com/YourUsername/MoreMap.git)
-เข้าไปที่โฟลเดอร์โปรเจกต์:
 
-Bash
+```bash
+git clone [https://github.com/YourUsername/MoreMap.git](https://github.com/YourUsername/MoreMap.git)
+```
+
+2. **เข้าไปที่โฟลเดอร์โปรเจกต์และโฟลเดอร์แอปพลิเคชัน:**
+
+```bash
 cd MoreMap
-ติดตั้ง Packages ที่จำเป็น:
-
-Bash
 cd frontend
-เนื่องจากใช้ supabase เป็น backend จึง ไม่มี folder backend
+```
 
-Bash
+*(หมายเหตุ: เนื่องจากใช้ Supabase เป็น Backend จึงไม่มีโฟลเดอร์ backend ในโปรเจกต์นี้)*
+
+3. **ติดตั้ง Packages ที่จำเป็น:**
+
+```bash
 flutter pub get
-รันแอปพลิเคชัน:
+```
 
-Bash
+4. **รันแอปพลิเคชัน:**
+
+```bash
 flutter run
-💡 หมายเหตุ: หากรันบน Web Browser อาจจะใช้งานฟีเจอร์ GPS ได้ไม่สมบูรณ์ แนะนำให้รันบนมือถือจริง
+```
+
+> **💡 หมายเหตุ:** หากรันบน Web Browser อาจจะใช้งานฟีเจอร์ GPS ได้ไม่สมบูรณ์ แนะนำให้รันบนมือถือจริง
 
 📺 วิดีโอสาธิตการใช้งาน (App Demonstration)
 รับชมวิดีโอสาธิตการใช้งานฟีเจอร์ต่างๆ ของ MoreMap เช่น การบันทึกเส้นทาง (Record Route), การค้นหาสถานที่ 
